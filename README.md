@@ -206,8 +206,7 @@ Message format (first line, then a few detail lines):
 ✅ ETHUSD-openLong: 4.125,10
 Strategy: eth_strategy_01
 Volume: 0.24
-Ticket: 123456789
-Chi tiết: Request executed
+Message: Request executed
 ```
 
 The header line is `<symbol>-<action>: <fill price>`, numbers formatted

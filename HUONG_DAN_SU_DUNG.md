@@ -159,8 +159,7 @@ Ví dụ tin nhắn bot gửi khi mở lệnh thành công:
 ✅ ETHUSD-openLong: 4.125,10
 Strategy: eth_strategy_01
 Volume: 0.24
-Ticket: 123456789
-Chi tiết: Request executed
+Message: Request executed
 ```
 
 Dòng đầu tiên theo format `<symbol>-<hành động>: <giá khớp lệnh>` (số viết kiểu Việt Nam: chấm ngăn hàng nghìn, phẩy cho phần thập phân — ví dụ giá 4125.1 hiển thị `4.125,10`, giá tròn 12996 hiển thị `12.996`). Symbol hiển thị ở đây chính là symbol **thật sự đã dùng để đặt lệnh** (hậu tố `.P` nếu có đã bị cắt từ trước khi đặt lệnh, không phải chỉ cắt lúc hiển thị), còn `❌`/`🧪` thay cho `✅` khi lệnh thất bại/dry run.

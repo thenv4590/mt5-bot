@@ -39,9 +39,7 @@ def _format_message(result: OrderResult) -> str:
     lines = [header, f"Strategy: {result.strategy}"]
     if result.volume is not None:
         lines.append(f"Volume: {result.volume}")
-    if result.order_ticket is not None:
-        lines.append(f"Ticket: {result.order_ticket}")
-    lines.append(f"Chi tiết: {result.message}")
+    lines.append(f"Message: {result.message}")
 
     return "\n".join(lines)
 
