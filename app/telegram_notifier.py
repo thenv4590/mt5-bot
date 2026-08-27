@@ -37,9 +37,8 @@ def _format_message(result: OrderResult) -> str:
     header = f"{status_emoji} {strip_perpetual_suffix(result.symbol)}-{result.action}: {price_str}"
 
     lines = [header, f"Strategy: {result.strategy}"]
-    if result.volume is not None:
-        lines.append(f"Volume: {result.volume}")
-    lines.append(f"Message: {result.message}")
+    if not result.success:
+        lines.append(f"Message: {result.message}")
 
     return "\n".join(lines)
 

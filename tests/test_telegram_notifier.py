@@ -51,6 +51,19 @@ def test_format_message_header_matches_expected_style():
     assert message.startswith("✅ ETHUSDT-closeLong: 12.996")
 
 
+def test_format_message_omits_message_line_on_success():
+    result = _result(success=True, message="Request executed")
+    message = telegram_notifier._format_message(result)
+    assert "Message:" not in message
+    assert "Strategy: eth_strategy_01" in message
+
+
+def test_format_message_keeps_message_line_on_failure():
+    result = _result(success=False, message="No open LONG position found")
+    message = telegram_notifier._format_message(result)
+    assert "Message: No open LONG position found" in message
+
+
 def test_no_notification_when_telegram_not_configured(monkeypatch):
     post_mock = MagicMock()
     monkeypatch.setattr(telegram_notifier.httpx, "post", post_mock)

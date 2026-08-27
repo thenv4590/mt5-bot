@@ -200,20 +200,26 @@ Each strategy can notify a Telegram chat after every executed order
 Notification failures (bad token, network error, etc.) are logged as
 warnings and never affect the order result returned to TradingView.
 
-Message format (first line, then a few detail lines):
+Message format — success/dry-run (2 lines):
 
 ```
 ✅ ETHUSD-openLong: 4.125,10
 Strategy: eth_strategy_01
-Volume: 0.24
-Message: Request executed
+```
+
+Failure (adds a 3rd line with the reason):
+
+```
+❌ ETHUSD-closeLong: —
+Strategy: eth_strategy_01
+Message: No open LONG position found for symbol=ETHUSD magic=100001
 ```
 
 The header line is `<symbol>-<action>: <fill price>`, numbers formatted
-Vietnamese-style (`.` for thousands, `,` for decimals). A trailing `.P`
-(TradingView's perpetual-futures suffix, e.g. `ETHUSDT.P`) is stripped from
-the displayed symbol. The status emoji is `✅` success / `❌` failure / `🧪`
-dry run.
+Vietnamese-style (`.` for thousands, `,` for decimals; `—` when there's no
+price, e.g. a failed close). A trailing `.P` (TradingView's
+perpetual-futures suffix, e.g. `ETHUSDT.P`) is stripped from the displayed
+symbol. The status emoji is `✅` success / `❌` failure / `🧪` dry run.
 
 `/api/order` has no built-in authentication — anyone who knows the URL can
 call it. If you expose the server to the internet, restrict access at the

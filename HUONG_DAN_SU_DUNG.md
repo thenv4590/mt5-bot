@@ -153,16 +153,22 @@ Mỗi strategy có thể tự bật/tắt gửi thông báo Telegram — bot s�
 - Không khai `telegram`, hoặc đặt `"enabled": false` → strategy đó không gửi thông báo gì cả.
 - Nếu gửi thất bại (sai token, mất mạng...) bot chỉ ghi log cảnh báo, **không** làm ảnh hưởng tới việc đặt lệnh MT5 hay response trả về TradingView.
 
-Ví dụ tin nhắn bot gửi khi mở lệnh thành công:
+Ví dụ tin nhắn bot gửi khi mở lệnh thành công (thành công/dry run chỉ 2 dòng):
 
 ```
 ✅ ETHUSD-openLong: 4.125,10
 Strategy: eth_strategy_01
-Volume: 0.24
-Message: Request executed
 ```
 
-Dòng đầu tiên theo format `<symbol>-<hành động>: <giá khớp lệnh>` (số viết kiểu Việt Nam: chấm ngăn hàng nghìn, phẩy cho phần thập phân — ví dụ giá 4125.1 hiển thị `4.125,10`, giá tròn 12996 hiển thị `12.996`). Symbol hiển thị ở đây chính là symbol **thật sự đã dùng để đặt lệnh** (hậu tố `.P` nếu có đã bị cắt từ trước khi đặt lệnh, không phải chỉ cắt lúc hiển thị), còn `❌`/`🧪` thay cho `✅` khi lệnh thất bại/dry run.
+Khi lệnh thất bại, có thêm dòng thứ 3 nêu lý do:
+
+```
+❌ ETHUSD-closeLong: —
+Strategy: eth_strategy_01
+Message: No open LONG position found for symbol=ETHUSD magic=100001
+```
+
+Dòng đầu tiên theo format `<symbol>-<hành động>: <giá khớp lệnh>` (số viết kiểu Việt Nam: chấm ngăn hàng nghìn, phẩy cho phần thập phân — ví dụ giá 4125.1 hiển thị `4.125,10`, giá tròn 12996 hiển thị `12.996`; hiển thị `—` nếu không có giá, ví dụ lệnh đóng bị thất bại). Symbol hiển thị ở đây chính là symbol **thật sự đã dùng để đặt lệnh** (hậu tố `.P` nếu có đã bị cắt từ trước khi đặt lệnh, không phải chỉ cắt lúc hiển thị), còn `❌`/`🧪` thay cho `✅` khi lệnh thất bại/dry run.
 
 ## 5. Cấu hình `.env`
 
