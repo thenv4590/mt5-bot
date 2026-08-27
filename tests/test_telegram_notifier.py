@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 from app import telegram_notifier
 from app.config import StrategyConfig, TelegramConfig
 from app.schemas import OrderResult
+from app.symbols import strip_perpetual_suffix
 
 
 def _strategy(telegram=None, **overrides):
@@ -40,8 +41,8 @@ def test_format_number_uses_dot_thousands_separator():
 
 
 def test_display_symbol_strips_perpetual_suffix():
-    assert telegram_notifier._display_symbol("ETHUSDT.P") == "ETHUSDT"
-    assert telegram_notifier._display_symbol("ETHUSD") == "ETHUSD"
+    assert strip_perpetual_suffix("ETHUSDT.P") == "ETHUSDT"
+    assert strip_perpetual_suffix("ETHUSD") == "ETHUSD"
 
 
 def test_format_message_header_matches_expected_style():

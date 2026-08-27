@@ -111,9 +111,13 @@ Edit `config.json`:
   `botToken` is omitted, it falls back to `TELEGRAM_BOT_TOKEN_<STRATEGY>`
   or `TELEGRAM_BOT_TOKEN` in `.env`. See "Telegram notifications" below.
 - There is no `symbol` in `config.json` — the symbol to trade comes straight
-  from the webhook payload's `symbol` field, so make sure your TradingView
-  alert sends the exact MT5 symbol name (e.g. `ETHUSD`), not the raw
-  TradingView ticker (e.g. `ETHUSDT.P`), unless they happen to match.
+  from the webhook payload's `symbol` field, so make sure it matches the
+  broker's MT5 symbol name (e.g. `ETHUSD`), not an unrelated TradingView
+  ticker. The one exception: a trailing `.P` (TradingView's
+  perpetual-futures suffix, e.g. `BTCUSDT.P`) is automatically stripped
+  before the symbol is used for anything MT5-related (see
+  `app/symbols.py`), so sending `{{ticker}}` as-is for a `.P` symbol works
+  without any extra mapping.
 - `dryRun` can be set per-strategy too (overrides the global value); the
   `DRY_RUN` env var overrides both. Dry run still connects to MT5 to read
   the live bid/ask for an accurate volume estimate — it only skips sending
@@ -160,10 +164,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
   of `openLong`, `closeLong`, `openShort`, `closeShort` — set this via your
   Pine Script strategy's order comment.
 - `strategy` must match a key under `strategies` in `config.json`.
-- `symbol` (`{{ticker}}`) is used as-is as the MT5 symbol to trade. If your
-  MT5 broker's symbol name differs from TradingView's ticker (e.g.
-  `ETHUSDT.P` vs `ETHUSD`), hardcode the correct MT5 symbol in the alert
-  message instead of using `{{ticker}}`.
+- `symbol` (`{{ticker}}`) is used as the MT5 symbol to trade, with one
+  automatic adjustment: a trailing `.P` (TradingView's perpetual-futures
+  suffix) is stripped, so `{{ticker}}` resolving to `BTCUSDT.P` trades
+  `BTCUSDT`. If your broker's symbol name differs from TradingView's ticker
+  in any other way, hardcode the correct MT5 symbol in the alert message
+  instead of using `{{ticker}}`.
 
 ## Telegram notifications
 

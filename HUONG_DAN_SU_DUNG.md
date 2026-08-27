@@ -99,7 +99,7 @@ Giải thích từng trường:
 | `telegram` | Tuỳ chọn. Có thì bot gửi thông báo Telegram mỗi khi thực hiện lệnh cho strategy này (xem mục 4.2). Không khai thì strategy đó không gửi thông báo. |
 
 **Lưu ý quan trọng:**
-- Không có field `symbol` trong `config.json`. Symbol để giao dịch **lấy trực tiếp từ webhook TradingView gửi lên** (field `symbol`). Vì vậy khi cấu hình Alert trên TradingView, bạn phải cho nó gửi **đúng tên symbol bên MT5** (ví dụ `ETHUSD`), chứ không phải mã TradingView (ví dụ `ETHUSDT.P`) — hai bên đặt tên khác nhau tuỳ sàn.
+- Không có field `symbol` trong `config.json`. Symbol để giao dịch **lấy trực tiếp từ webhook TradingView gửi lên** (field `symbol`). Bot tự động cắt hậu tố `.P` (kiểu hợp đồng tương lai của TradingView, ví dụ `BTCUSDT.P` → `BTCUSDT`) trước khi dùng để đặt lệnh — nên nếu bạn dùng `{{ticker}}` và nó trả về dạng `.P`, không cần sửa gì thêm. Nhưng nếu tên symbol bên MT5/Exness khác hẳn TradingView theo cách khác (không chỉ khác mỗi `.P`), bạn vẫn phải gõ cứng đúng tên MT5 trong Alert.
 - Không có field `path` (đường dẫn `terminal64.exe`). Mặc định code dùng đường cài MT5 chuẩn của Windows (`C:\Program Files\MetaTrader 5\terminal64.exe`). Nếu bạn cài MT5 ở chỗ khác, khai báo trong `.env`:
   ```
   MT5_TERMINAL_PATH=D:\MT5-Exness\terminal64.exe
@@ -163,7 +163,7 @@ Ticket: 123456789
 Chi tiết: Request executed
 ```
 
-Dòng đầu tiên theo format `<symbol>-<hành động>: <giá khớp lệnh>` (số viết kiểu Việt Nam: chấm ngăn hàng nghìn, phẩy cho phần thập phân — ví dụ giá 4125.1 hiển thị `4.125,10`, giá tròn 12996 hiển thị `12.996`). Nếu symbol có hậu tố `.P` (kiểu hợp đồng tương lai của TradingView, ví dụ `ETHUSDT.P`) bot tự bỏ đi khi hiển thị, còn `❌`/`🧪` thay cho `✅` khi lệnh thất bại/dry run.
+Dòng đầu tiên theo format `<symbol>-<hành động>: <giá khớp lệnh>` (số viết kiểu Việt Nam: chấm ngăn hàng nghìn, phẩy cho phần thập phân — ví dụ giá 4125.1 hiển thị `4.125,10`, giá tròn 12996 hiển thị `12.996`). Symbol hiển thị ở đây chính là symbol **thật sự đã dùng để đặt lệnh** (hậu tố `.P` nếu có đã bị cắt từ trước khi đặt lệnh, không phải chỉ cắt lúc hiển thị), còn `❌`/`🧪` thay cho `✅` khi lệnh thất bại/dry run.
 
 ## 5. Cấu hình `.env`
 
@@ -253,7 +253,7 @@ Response mẫu khi `dryRun: true`:
 }
 ```
 
-- `symbol`: gõ **cứng đúng tên symbol bên MT5/Exness** (ví dụ `ETHUSD`), **không dùng** `{{ticker}}` nếu tên hai bên khác nhau.
+- `symbol`: gõ **cứng đúng tên symbol bên MT5/Exness** (ví dụ `ETHUSD`). Nếu dùng `{{ticker}}` và nó trả về dạng có hậu tố `.P` (ví dụ `BTCUSDT.P`), bot tự cắt `.P` trước khi đặt lệnh nên vẫn dùng được — nhưng nếu tên khác nhau theo cách khác (không chỉ khác mỗi `.P`), vẫn phải gõ cứng đúng tên MT5.
 - `order_id`: lấy từ `{{strategy.order.comment}}` — nghĩa là trong Pine Script, bạn phải đặt comment của lệnh strategy đúng bằng 1 trong 4 giá trị: `openLong`, `closeLong`, `openShort`, `closeShort`.
   ```pine
   strategy.entry("Long", strategy.long, comment="openLong")

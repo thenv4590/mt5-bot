@@ -9,16 +9,9 @@ import httpx
 from app.config import StrategyConfig, get_telegram_bot_token
 from app.logging_config import logger
 from app.schemas import OrderResult
+from app.symbols import strip_perpetual_suffix
 
 TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/sendMessage"
-
-
-def _display_symbol(symbol: str) -> str:
-    """Strips TradingView's perpetual-futures suffix (e.g. "ETHUSDT.P" ->
-    "ETHUSDT") so the notification shows a clean symbol name."""
-    if symbol.upper().endswith(".P"):
-        return symbol[:-2]
-    return symbol
 
 
 def _format_number(value: float) -> str:
@@ -41,7 +34,7 @@ def _format_message(result: OrderResult) -> str:
         status_emoji = "❌"
 
     price_str = _format_number(result.price) if result.price is not None else "—"
-    header = f"{status_emoji} {_display_symbol(result.symbol)}-{result.action}: {price_str}"
+    header = f"{status_emoji} {strip_perpetual_suffix(result.symbol)}-{result.action}: {price_str}"
 
     lines = [header, f"Strategy: {result.strategy}"]
     if result.volume is not None:

@@ -5,6 +5,7 @@ from app.config import StrategyConfig, get_mt5_password, is_dry_run
 from app.logging_config import logger
 from app.mt5_client import MT5Error
 from app.schemas import OrderId, OrderResult, TradingViewAlert
+from app.symbols import strip_perpetual_suffix
 
 
 class OrderExecutionError(Exception):
@@ -66,7 +67,10 @@ def execute_order(alert: TradingViewAlert, strategy: StrategyConfig) -> OrderRes
     """
     with mt5_client.MT5_LOCK:
         dry_run = is_dry_run(strategy)
-        symbol = alert.symbol
+        # TradingView's perpetual-futures ticker suffix (".P", e.g.
+        # "BTCUSDT.P") never matches a real MT5 symbol name, so it's
+        # stripped before this is used for anything MT5-related.
+        symbol = strip_perpetual_suffix(alert.symbol)
 
         try:
             # Real market prices (for volume sizing and order pricing)

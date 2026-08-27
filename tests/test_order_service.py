@@ -289,6 +289,35 @@ def test_execute_order_uses_alert_symbol_not_config(tmp_config, monkeypatch):
     assert sent_request["symbol"] == "XAUUSD"
 
 
+def test_execute_order_strips_dot_p_suffix_before_trading(tmp_config, monkeypatch):
+    """TradingView's perpetual-futures suffix (e.g. "BTCUSDT.P") never
+    matches a real MT5 symbol name, so it must be stripped before any MT5
+    call — not just when formatting the Telegram notification."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    strategy = get_strategy_config("eth_strategy_01")
+    alert = _alert(order_id="openLong", order_ratio=1, symbol="BTCUSDT.P")
+
+    get_symbol_info_mock = MagicMock(return_value=_symbol_info(name="BTCUSDT"))
+    monkeypatch.setattr(mt5_client, "ensure_connection", MagicMock())
+    monkeypatch.setattr(mt5_client, "get_symbol_info", get_symbol_info_mock)
+    monkeypatch.setattr(
+        mt5_client, "get_tick", MagicMock(return_value=SimpleNamespace(ask=2000, bid=1998))
+    )
+    send_order_mock = MagicMock(
+        return_value=SimpleNamespace(
+            retcode=mt5_client.TRADE_RETCODE_DONE, price=2000, order=1, comment="ok"
+        )
+    )
+    monkeypatch.setattr(mt5_client, "send_order", send_order_mock)
+
+    result = order_service.execute_order(alert, strategy)
+
+    assert result.symbol == "BTCUSDT"
+    get_symbol_info_mock.assert_called_once_with("BTCUSDT")
+    sent_request = send_order_mock.call_args[0][0]
+    assert sent_request["symbol"] == "BTCUSDT"
+
+
 def test_execute_order_close_long_no_position_returns_failure(tmp_config, monkeypatch):
     monkeypatch.setenv("DRY_RUN", "false")
     strategy = get_strategy_config("eth_strategy_01")
