@@ -1,0 +1,20 @@
+{
+  "dryRun": true,
+  "strategies": {
+    "eth_strategy_01": {
+      "price": 1,
+      "deviation": 200,
+      "magic": 100001,
+      "comment": "ETH Strategy 01",
+      "mt5": {
+        "login": 12345678,
+        "server": "YOUR_EXNESS_SERVER"
+      },
+      "telegram": {
+        "enabled": true,
+        "botToken": "123456789:AAExampleBotTokenXXXXXXXXXXXXXXXXXXX",
+        "chatId": "-1001234567890"
+      }
+    }
+  }
+}
