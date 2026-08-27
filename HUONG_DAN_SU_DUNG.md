@@ -284,6 +284,7 @@ API không yêu cầu header hay xác thực gì cả — TradingView chỉ cầ
 | `unknown_strategy` | `strategy` gửi lên không khớp key nào trong `config.json` | Kiểm tra chính tả, hoa/thường |
 | `config_error` (thiếu mật khẩu) | Chưa khai `MT5_PASSWORD_<STRATEGY>` trong `.env` | Thêm biến env đúng tên (viết hoa, thay `_` cho khớp tên strategy) |
 | `order_execution_failed` (502) | MT5 từ chối kết nối/lệnh (sai login-password-server, chưa mở terminal, symbol không có trong Market Watch, market đóng cửa...) | Mở MT5 desktop, thử login tay bằng đúng login/password/server để xem lỗi cụ thể; kiểm tra symbol có tồn tại đúng tên trên tài khoản đó không |
+| `order_execution_failed` (502), báo "No live price yet" | Symbol vừa được thêm vào Market Watch (lần đầu tra tới), MT5 chưa kịp nhận báo giá đầu tiên. Bot đã tự chờ tối đa 3 giây trước khi báo lỗi này. | Gọi lại lệnh lần nữa (thường lần 2 sẽ có giá ngay); hoặc mở MT5 desktop, tự thêm symbol đó vào Market Watch trước và để yên vài giây cho có giá. |
 
 ## 11. Chạy test tự động
 

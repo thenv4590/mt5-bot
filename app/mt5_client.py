@@ -155,11 +155,32 @@ def get_open_positions(symbol: str, magic: int) -> List:
     return [p for p in positions if p.magic == magic]
 
 
-def get_tick(symbol: str):
-    tick = mt5.symbol_info_tick(symbol)
+def get_tick(symbol: str, max_wait_seconds: float = 3.0, poll_interval: float = 0.2):
+    """Returns the latest tick, waiting briefly for a real (non-zero) quote.
+
+    Right after a symbol is added to Market Watch (see get_symbol_info),
+    MT5 can return a tick with bid/ask still at 0 until the first live
+    quote arrives from the broker — using that as a price would divide by
+    zero downstream, so this waits for a valid quote instead of failing
+    on the very first check.
+    """
+    deadline = time.monotonic() + max_wait_seconds
+    tick = None
+    while True:
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is not None and tick.bid > 0 and tick.ask > 0:
+            return tick
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(poll_interval)
+
     if tick is None:
         raise MT5Error(f"Failed to get tick for symbol '{symbol}'")
-    return tick
+    raise MT5Error(
+        f"No live price yet for symbol '{symbol}' (bid={tick.bid}, ask={tick.ask}) "
+        f"after waiting {max_wait_seconds}s — market may be closed or the "
+        f"symbol was just added to Market Watch"
+    )
 
 
 def send_order(request: dict):
