@@ -118,21 +118,3 @@ def test_webhook_ignores_duplicate_alert(tmp_config, monkeypatch):
     assert second.status_code == 200
     assert "Duplicate" in second.json()["message"]
     assert call_count["n"] == 1
-
-
-def test_webhook_requires_webhook_secret_when_configured(tmp_config, monkeypatch):
-    monkeypatch.setenv("WEBHOOK_SECRET", "super-secret")
-
-    resp = client.post(
-        "/api/order",
-        content=_tv_body(),
-        headers={"Content-Type": "text/plain"},
-    )
-    assert resp.status_code == 401
-
-    resp = client.post(
-        "/api/order",
-        content=_tv_body(),
-        headers={"Content-Type": "text/plain", "X-Webhook-Secret": "super-secret"},
-    )
-    assert resp.status_code != 401

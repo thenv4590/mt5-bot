@@ -98,7 +98,6 @@ def tmp_config(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CONFIG_PATH", str(config_path))
     monkeypatch.setenv("MT5_PASSWORD_ETH_STRATEGY_01", "test-password")
-    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
     monkeypatch.delenv("DRY_RUN", raising=False)
 
     from app import config as config_module

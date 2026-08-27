@@ -168,7 +168,6 @@ Dòng đầu tiên theo format `<symbol>-<hành động>: <giá khớp lệnh>` 
 ## 5. Cấu hình `.env`
 
 ```
-WEBHOOK_SECRET=mot-chuoi-bi-mat-du-dai
 MT5_PASSWORD_ETH_STRATEGY_01=mat-khau-tai-khoan-mt5
 LOG_LEVEL=INFO
 LOG_FILE=logs/app.log
@@ -177,8 +176,8 @@ LOG_FILE=logs/app.log
 # TELEGRAM_BOT_TOKEN=... (chỉ cần nếu không khai botToken trực tiếp trong config.json)
 ```
 
-- `WEBHOOK_SECRET`: nếu để trống → bot không kiểm tra header xác thực (ai cũng gọi được `/api/order`, **không nên dùng khi lên production**). Nếu đặt giá trị, request phải kèm header `X-Webhook-Secret: <giá trị>` mới được chấp nhận.
 - `DRY_RUN`: nếu đặt trong `.env` sẽ **ghi đè tất cả** cấu hình `dryRun` trong `config.json` (dùng để bật/tắt nhanh khi test mà không sửa `config.json`).
+- API `/api/order` **không có xác thực** (không cần header gì cả, chỉ cần đúng body) — đúng như bạn yêu cầu, để gọi từ TradingView cho đơn giản nhất. Nếu sau này public server ra internet, nên tự giới hạn ai gọi được bằng firewall/VPN thay vì để hoàn toàn mở.
 
 ## 6. Chạy server
 
@@ -201,7 +200,6 @@ Request phải gửi `Content-Type: text/plain`, body là **chuỗi JSON** (đú
 ```bash
 curl -X POST http://localhost:8000/api/order ^
   -H "Content-Type: text/plain" ^
-  -H "X-Webhook-Secret: mot-chuoi-bi-mat-du-dai" ^
   -d "{\"symbol\":\"ETHUSD\",\"price\":\"4123.45\",\"order_id\":\"openLong\",\"order_ratio\":1,\"strategy\":\"eth_strategy_01\"}"
 ```
 
@@ -266,9 +264,7 @@ Response mẫu khi `dryRun: true`:
 - `strategy`: gõ đúng key strategy trong `config.json` (ví dụ `eth_strategy_01`).
 - `order_ratio`: hệ số nhân vốn so với `price` gốc trong config (1 = full vốn cấu hình, 0.5 = nửa vốn, 2 = gấp đôi...).
 
-Về `WEBHOOK_SECRET`: TradingView **không hỗ trợ thêm custom header** trong phần Webhook URL mặc định. Có 2 cách:
-- Bỏ `WEBHOOK_SECRET` (để trống trong `.env`) và tự giới hạn ai gọi được server bằng firewall/VPN — chấp nhận rủi ro thấp hơn nếu server chỉ TradingView biết URL.
-- Hoặc đặt một proxy nhỏ (Cloudflare Worker/Nginx) đứng giữa, thêm header `X-Webhook-Secret` trước khi forward vào server này.
+API không yêu cầu header hay xác thực gì cả — TradingView chỉ cần gửi đúng body JSON như trên là được, đúng theo cách TradingView webhook hoạt động (không hỗ trợ custom header). Nếu sau này muốn giới hạn ai gọi được server, nên chặn ở tầng mạng (firewall/VPN) thay vì thêm xác thực ở tầng ứng dụng.
 
 ## 9. Chuyển từ thử (dry run) sang chạy lệnh thật
 
@@ -287,7 +283,6 @@ Về `WEBHOOK_SECRET`: TradingView **không hỗ trợ thêm custom header** tro
 | `validation_error` | Thiếu field, `order_id` không đúng 1 trong 4 giá trị, `price`/`order_ratio` không parse được số | Xem chi tiết `detail` trong response |
 | `unknown_strategy` | `strategy` gửi lên không khớp key nào trong `config.json` | Kiểm tra chính tả, hoa/thường |
 | `config_error` (thiếu mật khẩu) | Chưa khai `MT5_PASSWORD_<STRATEGY>` trong `.env` | Thêm biến env đúng tên (viết hoa, thay `_` cho khớp tên strategy) |
-| 401 Unauthorized | Thiếu/sai header `X-Webhook-Secret` trong khi `.env` có đặt `WEBHOOK_SECRET` | Thêm đúng header, hoặc bỏ `WEBHOOK_SECRET` nếu không cần xác thực |
 | `order_execution_failed` (502) | MT5 từ chối kết nối/lệnh (sai login-password-server, chưa mở terminal, symbol không có trong Market Watch, market đóng cửa...) | Mở MT5 desktop, thử login tay bằng đúng login/password/server để xem lỗi cụ thể; kiểm tra symbol có tồn tại đúng tên trên tài khoản đó không |
 
 ## 11. Chạy test tự động

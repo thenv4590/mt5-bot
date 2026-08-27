@@ -122,10 +122,6 @@ def get_mt5_password(strategy_name: str) -> str:
     return password
 
 
-def get_webhook_secret() -> Optional[str]:
-    return os.getenv("WEBHOOK_SECRET")
-
-
 def get_telegram_bot_token(strategy_name: str) -> Optional[str]:
     """Per-strategy bot token (TELEGRAM_BOT_TOKEN_<STRATEGY>) takes
     precedence over the global TELEGRAM_BOT_TOKEN, so different strategies

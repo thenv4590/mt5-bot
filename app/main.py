@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
@@ -10,7 +10,6 @@ from app.dedupe import is_duplicate
 from app.logging_config import logger
 from app.order_service import OrderExecutionError, execute_order
 from app.schemas import OrderResult, TradingViewAlert
-from app.security import verify_webhook_secret
 from app.telegram_notifier import notify_order_result
 
 app = FastAPI(
@@ -25,11 +24,7 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post(
-    "/api/order",
-    response_model=OrderResult,
-    dependencies=[Depends(verify_webhook_secret)],
-)
+@app.post("/api/order", response_model=OrderResult)
 async def receive_order(request: Request):
     raw_body = await request.body()
     raw_text = raw_body.decode("utf-8", errors="replace")

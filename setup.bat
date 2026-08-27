@@ -58,7 +58,7 @@ if not exist config.json (
 if not exist .env (
     copy .env.example .env >nul
     echo     Da tao .env tu .env.example.
-    echo     -^> MO .env va dien: MT5_PASSWORD_^<STRATEGY^>, WEBHOOK_SECRET...
+    echo     -^> MO .env va dien: MT5_PASSWORD_^<STRATEGY^>...
 ) else (
     echo     .env da ton tai, khong ghi de.
 )

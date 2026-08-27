@@ -68,13 +68,13 @@ def execute_order(alert: TradingViewAlert, strategy: StrategyConfig) -> OrderRes
         dry_run = is_dry_run(strategy)
         symbol = alert.symbol
 
-        # Real market prices (for volume sizing and order pricing) always
-        # come from the MT5 terminal, even in dry-run mode, so connection
-        # is required regardless of dry_run.
-        password = get_mt5_password(alert.strategy)
-        mt5_client.ensure_connection(strategy, password)
-
         try:
+            # Real market prices (for volume sizing and order pricing)
+            # always come from the MT5 terminal, even in dry-run mode, so
+            # connection is required regardless of dry_run.
+            password = get_mt5_password(alert.strategy)
+            mt5_client.ensure_connection(strategy, password)
+
             if alert.order_id == OrderId.OPEN_LONG:
                 return _open_position(alert, strategy, symbol, mt5_client.ORDER_TYPE_BUY, dry_run)
             elif alert.order_id == OrderId.OPEN_SHORT:

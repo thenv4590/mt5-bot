@@ -24,10 +24,8 @@ orders on MetaTrader 5 (Exness) accounts.
   then normalized to the symbol's `volume_min` / `volume_max` / `volume_step`.
 - `dryRun` mode (global in `config.json`, per-strategy override, or via
   `DRY_RUN` env var) validates and logs the order without sending it to MT5.
-- MT5 password and webhook secret are read from `.env`, never from
-  `config.json`.
+- MT5 password is read from `.env`, never from `config.json`.
 - Structured logging to console + rotating file (`logs/app.log`).
-- Optional webhook authentication via `X-Webhook-Secret` header.
 - Optional Telegram notification per strategy for every executed order
   (success, failure, or dry run), sent after the MT5 response.
 
@@ -124,7 +122,6 @@ Edit `config.json`:
 Edit `.env`:
 
 ```
-WEBHOOK_SECRET=some-long-random-string
 MT5_PASSWORD_ETH_STRATEGY_01=your-mt5-password
 LOG_LEVEL=INFO
 LOG_FILE=logs/app.log
@@ -213,10 +210,9 @@ Vietnamese-style (`.` for thousands, `,` for decimals). A trailing `.P`
 the displayed symbol. The status emoji is `✅` success / `❌` failure / `🧪`
 dry run.
 
-If `WEBHOOK_SECRET` is set, add an `X-Webhook-Secret` header with that value
-to TradingView's webhook request (TradingView's UI does not support custom
-headers directly — use a proxy, or omit the secret and restrict access at
-the network level instead).
+`/api/order` has no built-in authentication — anyone who knows the URL can
+call it. If you expose the server to the internet, restrict access at the
+network level (firewall, VPN, or a reverse proxy in front of it).
 
 ## Request/response examples
 
@@ -255,7 +251,6 @@ appropriate HTTP status:
 | 422    | `validation_error`       | Missing/invalid fields (Pydantic)         |
 | 400    | `unknown_strategy`       | `strategy` not found in `config.json`     |
 | 400    | `config_error`           | Missing MT5 password / bad config          |
-| 401    | —                        | Missing/invalid `X-Webhook-Secret`         |
 | 502    | `order_execution_failed` | MT5 connection/order error                |
 | 500    | `internal_error`         | Unexpected server error                    |
 
@@ -270,8 +265,8 @@ full suite runs without a real MT5 terminal, on any OS. Covers:
 
 - payload parsing/validation (`tests/test_schemas.py`)
 - volume normalization and order-building logic (`tests/test_order_service.py`)
-- the HTTP webhook, including raw `text/plain` parsing, error paths, and
-  webhook-secret auth (`tests/test_webhook.py`)
+- the HTTP webhook, including raw `text/plain` parsing and error paths
+  (`tests/test_webhook.py`)
 
 ## Project layout
 
@@ -280,7 +275,6 @@ app/
   main.py            FastAPI app, /api/order endpoint, raw-body parsing
   schemas.py          Pydantic models for the TradingView payload
   config.py            config.json + .env loading, per-strategy lookups
-  security.py          webhook secret verification
   mt5_client.py         thin wrapper around the MetaTrader5 package
   order_service.py      order sizing, open/close logic, dry-run handling
   logging_config.py     console + rotating file logging
