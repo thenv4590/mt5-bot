@@ -65,7 +65,7 @@ copy .env.example .env
   "dryRun": true,
   "strategies": {
     "eth_strategy_01": {
-      "price": 1,
+      "price": 1000,
       "deviation": 200,
       "magic": 100001,
       "comment": "ETH Strategy 01",
@@ -89,7 +89,7 @@ Giải thích từng trường:
 |---|---|
 | `dryRun` (ngoài cùng) | Bật/tắt chế độ thử toàn hệ thống. `true` = không gửi lệnh thật, chỉ log. |
 | `strategies.<key>` | Tên định danh 1 chiến lược/1 kết nối tài khoản. Đây là giá trị bạn sẽ gửi trong field `strategy` của webhook TradingView. |
-| `price` | **Vốn gốc**, đơn vị **nghìn đô**. VD `price: 1` = $1,000 vốn cơ sở. Số tiền vào lệnh thực tế = `price × 1000 × order_ratio` (order_ratio lấy từ webhook TradingView). |
+| `price` | **Vốn gốc**, đơn vị **đô la (USD) trực tiếp**. VD `price: 1000` = $1,000 vốn cơ sở. Số tiền vào lệnh thực tế = `price × order_ratio` (order_ratio lấy từ webhook TradingView, ví dụ `order_ratio: 0.5` thì vào lệnh $500). |
 | `deviation` | Trượt giá tối đa **ban đầu** cho phép (tính bằng point) khi khớp lệnh market. Không phải con số cố định duy nhất — nếu MT5 từ chối vì trượt giá (Requote/Price Changed), bot tự lấy giá mới và **thử lại với deviation gấp 3 lần**, tối đa 5 lần thử (có trần ở 25x). Vừa bảo vệ giá lúc thị trường yên ả, vừa vẫn có cơ hội khớp khi thị trường biến động nhanh. Xem chi tiết mục 4.1. |
 | `magic` | Mã số gắn vào mọi lệnh của strategy này, để bot chỉ đóng đúng lệnh do chính nó mở (không đụng vào lệnh tay hoặc EA khác trên cùng tài khoản). |
 | `comment` | Ghi chú gắn vào lệnh, hiện trong lịch sử giao dịch MT5. |

@@ -48,8 +48,8 @@ def _mock_symbol_and_tick(monkeypatch, ask=4001, bid=3999, symbol_info=None):
 
 
 def test_compute_investment():
-    strategy = SimpleNamespace(price=2)
-    # investment = strategy.price * 1000 * order_ratio
+    strategy = SimpleNamespace(price=2000)
+    # investment = strategy.price * order_ratio
     assert order_service._compute_investment(strategy, order_ratio=1.5) == pytest.approx(3000)
 
 
@@ -96,7 +96,7 @@ def test_ensure_symbol_tradable_raises_when_disabled():
 
 def test_execute_order_dry_run_still_connects_and_uses_real_tick(tmp_config, monkeypatch):
     monkeypatch.setenv("DRY_RUN", "true")
-    strategy = get_strategy_config("eth_strategy_01")  # price=1 -> 1000 base investment
+    strategy = get_strategy_config("eth_strategy_01")  # price=1000 -> $1000 base investment
     alert = _alert(order_id="openLong", order_ratio=1)
 
     ensure_connection_mock = MagicMock()
@@ -114,7 +114,7 @@ def test_execute_order_dry_run_still_connects_and_uses_real_tick(tmp_config, mon
 
     assert result.dry_run is True
     assert result.success is True
-    # investment = 1 * 1000 * 1 = 1000; volume = 1000 / ask(1000) = 1.0
+    # investment = 1000 * 1 = 1000; volume = 1000 / ask(1000) = 1.0
     assert result.volume == pytest.approx(1.0)
     assert result.price == 1000
     ensure_connection_mock.assert_called_once()
@@ -148,7 +148,7 @@ def test_execute_order_open_long_sends_buy_order(tmp_config, monkeypatch):
     assert sent_request["type_filling"] == mt5_client.ORDER_FILLING_IOC
     assert "sl" not in sent_request
     assert "tp" not in sent_request
-    # investment = 1 * 1000 * 1 = 1000; volume = 1000 / ask(1000) = 1.0
+    # investment = 1000 * 1 = 1000; volume = 1000 / ask(1000) = 1.0
     assert result.volume == pytest.approx(1.0)
 
 

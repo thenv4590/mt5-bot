@@ -2,7 +2,7 @@
   "dryRun": true,
   "strategies": {
     "eth_strategy_01": {
-      "price": 1,
+      "price": 1000,
       "deviation": 200,
       "magic": 100001,
       "comment": "ETH Strategy 01",

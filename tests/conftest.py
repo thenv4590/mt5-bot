@@ -82,7 +82,7 @@ def tmp_config(tmp_path, monkeypatch):
         "dryRun": True,
         "strategies": {
             "eth_strategy_01": {
-                "price": 1,
+                "price": 1000,
                 "deviation": 20,
                 "magic": 100001,
                 "comment": "ETH Strategy 01",

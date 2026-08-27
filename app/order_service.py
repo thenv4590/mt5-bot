@@ -13,7 +13,7 @@ class OrderExecutionError(Exception):
 
 
 def _compute_investment(strategy: StrategyConfig, order_ratio: float) -> float:
-    return strategy.price * 1000 * order_ratio
+    return strategy.price * order_ratio
 
 
 def _build_close_request(position, strategy: StrategyConfig, symbol: str, filling_mode, tick, deviation: int) -> dict:

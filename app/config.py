@@ -37,8 +37,8 @@ class TelegramConfig(BaseModel):
 
 
 class StrategyConfig(BaseModel):
-    # Base capital allocated per full-size (order_ratio=1) trade, in
-    # thousands of USD. investment = price * 1000 * order_ratio.
+    # Base capital allocated per full-size (order_ratio=1) trade, in USD.
+    # investment = price * order_ratio.
     price: float
     # Starting max allowed slippage (points) between requested and filled
     # price. Kept moderate on purpose — the order pipeline auto-widens

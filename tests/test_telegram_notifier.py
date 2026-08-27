@@ -8,7 +8,7 @@ from app.symbols import strip_perpetual_suffix
 
 def _strategy(telegram=None, **overrides):
     payload = {
-        "price": 1,
+        "price": 1000,
         "deviation": 200,
         "magic": 100001,
         "comment": "ETH Strategy 01",

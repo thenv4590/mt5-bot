@@ -17,9 +17,9 @@ orders on MetaTrader 5 (Exness) accounts.
   path). The **symbol to trade comes from the webhook payload** (`symbol`),
   not from `config.json` — configure your TradingView alert to send the
   exact MT5 symbol name (e.g. `ETHUSD`).
-- Position size: `investment = strategy.price * 1000 * order_ratio` (config's
-  `price` is the base capital per strategy, in **thousands of USD**;
-  `order_ratio` from the webhook scales it), `volume = investment / market_price`
+- Position size: `investment = strategy.price * order_ratio` (config's
+  `price` is the base capital per strategy, in **USD**; `order_ratio` from
+  the webhook scales it), `volume = investment / market_price`
   where `market_price` is the live bid/ask fetched from MT5 at order time,
   then normalized to the symbol's `volume_min` / `volume_max` / `volume_step`.
 - `dryRun` mode (global in `config.json`, per-strategy override, or via
@@ -59,7 +59,7 @@ Edit `config.json`:
   "dryRun": true,
   "strategies": {
     "eth_strategy_01": {
-      "price": 1,
+      "price": 1000,
       "deviation": 200,
       "magic": 100001,
       "comment": "ETH Strategy 01",
@@ -76,9 +76,8 @@ Edit `config.json`:
 }
 ```
 
-- `price` is the strategy's base capital, in **thousands of USD**
-  (`1` = $1,000). Actual investment per signal is
-  `price * 1000 * order_ratio`.
+- `price` is the strategy's base capital, in **USD** (`1000` = $1,000).
+  Actual investment per signal is `price * order_ratio`.
 - `deviation` is the **starting** max allowed slippage (in points) for a
   market order. It is not the whole story: if MT5 rejects a fill for being
   too far from this (retcode Requote / Price Changed — the only rejections
@@ -303,7 +302,7 @@ tests/                  pytest suite with a faked MetaTrader5 module
 - `closeLong` / `closeShort` close **all** open positions on the webhook's
   `symbol` that match the strategy's `magic` number and the requested side —
   not a specific ticket, since TradingView alerts don't carry one.
-- Position sizing: `investment = config.price * 1000 * order_ratio`,
+- Position sizing: `investment = config.price * order_ratio`,
   `volume = investment / market_price`, where `market_price` is the live
   ask (for opens/longs) or bid (for opens/shorts, and closes) fetched from
   MT5 at order time — not the `price` field in the webhook payload, which is
