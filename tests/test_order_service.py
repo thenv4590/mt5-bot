@@ -47,6 +47,38 @@ def _mock_symbol_and_tick(monkeypatch, ask=4001, bid=3999, symbol_info=None):
     )
 
 
+def test_execute_order_fails_fast_if_lock_held_too_long(tmp_config, monkeypatch):
+    """If another call is stuck holding MT5_LOCK (e.g. MT5 terminal frozen),
+    new calls must fail with a clear error after LOCK_TIMEOUT_SECONDS
+    instead of hanging forever waiting for it."""
+    import threading
+
+    monkeypatch.setattr(order_service, "LOCK_TIMEOUT_SECONDS", 0.2)
+    strategy = get_strategy_config("eth_strategy_01")
+    alert = _alert(order_id="openLong")
+
+    # RLock is reentrant per-thread, so the lock must be held by a *different*
+    # thread for acquiring it here to actually block/time out.
+    acquired_event = threading.Event()
+    release_event = threading.Event()
+
+    def hold_lock():
+        mt5_client.MT5_LOCK.acquire()
+        acquired_event.set()
+        release_event.wait(2)
+        mt5_client.MT5_LOCK.release()
+
+    holder = threading.Thread(target=hold_lock)
+    holder.start()
+    acquired_event.wait(2)
+    try:
+        with pytest.raises(order_service.OrderExecutionError, match="Timed out"):
+            order_service.execute_order(alert, strategy)
+    finally:
+        release_event.set()
+        holder.join()
+
+
 def test_compute_investment():
     strategy = SimpleNamespace(price=2000)
     # investment = strategy.price * order_ratio
@@ -316,6 +348,153 @@ def test_execute_order_strips_dot_p_suffix_before_trading(tmp_config, monkeypatc
     get_symbol_info_mock.assert_called_once_with("BTCUSDT")
     sent_request = send_order_mock.call_args[0][0]
     assert sent_request["symbol"] == "BTCUSDT"
+
+
+def test_execute_order_open_long_reverses_existing_short_position(tmp_config, monkeypatch):
+    """If a SHORT position is open when openLong comes in, the bot must
+    close the SHORT first, then open the LONG — never leave both sides
+    open at once."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    strategy = get_strategy_config("eth_strategy_01")
+    alert = _alert(order_id="openLong", order_ratio=1)
+
+    short_position = SimpleNamespace(
+        ticket=111, volume=0.3, type=mt5_client.POSITION_TYPE_SELL, magic=strategy.magic
+    )
+    monkeypatch.setattr(mt5_client, "ensure_connection", MagicMock())
+    monkeypatch.setattr(
+        mt5_client, "get_open_positions", MagicMock(return_value=[short_position])
+    )
+    monkeypatch.setattr(
+        mt5_client, "get_symbol_info", MagicMock(return_value=_symbol_info())
+    )
+    monkeypatch.setattr(
+        mt5_client, "get_tick", MagicMock(return_value=SimpleNamespace(ask=1000, bid=998))
+    )
+    send_order_mock = MagicMock(
+        side_effect=[
+            # 1st call: closing the existing SHORT position (reversal step)
+            SimpleNamespace(
+                retcode=mt5_client.TRADE_RETCODE_DONE, price=998, order=222, comment="Closed"
+            ),
+            # 2nd call: opening the new LONG position
+            SimpleNamespace(
+                retcode=mt5_client.TRADE_RETCODE_DONE, price=1000, order=333, comment="Opened"
+            ),
+        ]
+    )
+    monkeypatch.setattr(mt5_client, "send_order", send_order_mock)
+
+    result = order_service.execute_order(alert, strategy)
+
+    assert result.success is True
+    assert result.order_ticket == 333  # the new LONG order, not the close
+    assert "Reversed" in result.message
+    assert send_order_mock.call_count == 2
+
+    close_request = send_order_mock.call_args_list[0][0][0]
+    assert close_request["type"] == mt5_client.ORDER_TYPE_BUY  # closes a SHORT via BUY
+    assert close_request["position"] == 111
+
+    open_request = send_order_mock.call_args_list[1][0][0]
+    assert open_request["type"] == mt5_client.ORDER_TYPE_BUY
+    assert "position" not in open_request
+
+
+def test_execute_order_open_short_reverses_existing_long_position(tmp_config, monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "false")
+    strategy = get_strategy_config("eth_strategy_01")
+    alert = _alert(order_id="openShort", order_ratio=1)
+
+    long_position = SimpleNamespace(
+        ticket=444, volume=0.2, type=mt5_client.POSITION_TYPE_BUY, magic=strategy.magic
+    )
+    monkeypatch.setattr(mt5_client, "ensure_connection", MagicMock())
+    monkeypatch.setattr(
+        mt5_client, "get_open_positions", MagicMock(return_value=[long_position])
+    )
+    monkeypatch.setattr(
+        mt5_client, "get_symbol_info", MagicMock(return_value=_symbol_info())
+    )
+    monkeypatch.setattr(
+        mt5_client, "get_tick", MagicMock(return_value=SimpleNamespace(ask=1000, bid=998))
+    )
+    send_order_mock = MagicMock(
+        side_effect=[
+            SimpleNamespace(
+                retcode=mt5_client.TRADE_RETCODE_DONE, price=1000, order=555, comment="Closed"
+            ),
+            SimpleNamespace(
+                retcode=mt5_client.TRADE_RETCODE_DONE, price=998, order=666, comment="Opened"
+            ),
+        ]
+    )
+    monkeypatch.setattr(mt5_client, "send_order", send_order_mock)
+
+    result = order_service.execute_order(alert, strategy)
+
+    assert result.success is True
+    assert result.order_ticket == 666
+    assert "Reversed" in result.message
+
+    close_request = send_order_mock.call_args_list[0][0][0]
+    assert close_request["type"] == mt5_client.ORDER_TYPE_SELL  # closes a LONG via SELL
+    assert close_request["position"] == 444
+
+    open_request = send_order_mock.call_args_list[1][0][0]
+    assert open_request["type"] == mt5_client.ORDER_TYPE_SELL
+
+
+def test_execute_order_open_long_no_reversal_when_no_opposite_position(tmp_config, monkeypatch):
+    """Normal case (no existing opposite position): no reversal note, no
+    extra close order sent."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    strategy = get_strategy_config("eth_strategy_01")
+    alert = _alert(order_id="openLong", order_ratio=1)
+
+    _mock_symbol_and_tick(monkeypatch, ask=1000, bid=998)
+    monkeypatch.setattr(mt5_client, "get_open_positions", MagicMock(return_value=[]))
+    send_order_mock = MagicMock(
+        return_value=SimpleNamespace(
+            retcode=mt5_client.TRADE_RETCODE_DONE, price=1000, order=1, comment="Request executed"
+        )
+    )
+    monkeypatch.setattr(mt5_client, "send_order", send_order_mock)
+
+    result = order_service.execute_order(alert, strategy)
+
+    assert result.success is True
+    assert "Reversed" not in result.message
+    send_order_mock.assert_called_once()
+
+
+def test_execute_order_open_long_reversal_dry_run_does_not_send(tmp_config, monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
+    strategy = get_strategy_config("eth_strategy_01")
+    alert = _alert(order_id="openLong", order_ratio=1)
+
+    short_position = SimpleNamespace(
+        ticket=111, volume=0.3, type=mt5_client.POSITION_TYPE_SELL, magic=strategy.magic
+    )
+    monkeypatch.setattr(mt5_client, "ensure_connection", MagicMock())
+    monkeypatch.setattr(
+        mt5_client, "get_open_positions", MagicMock(return_value=[short_position])
+    )
+    monkeypatch.setattr(
+        mt5_client, "get_symbol_info", MagicMock(return_value=_symbol_info())
+    )
+    monkeypatch.setattr(
+        mt5_client, "get_tick", MagicMock(return_value=SimpleNamespace(ask=1000, bid=998))
+    )
+    send_order_mock = MagicMock()
+    monkeypatch.setattr(mt5_client, "send_order", send_order_mock)
+
+    result = order_service.execute_order(alert, strategy)
+
+    assert result.dry_run is True
+    assert result.success is True
+    assert "Reversed" in result.message
+    send_order_mock.assert_not_called()
 
 
 def test_execute_order_close_long_no_position_returns_failure(tmp_config, monkeypatch):

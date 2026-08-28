@@ -8,7 +8,7 @@
 - `app.main:app` import thành công, không lỗi cú pháp/thiếu module.
 - Chạy `uvicorn app.main:app` khởi động bình thường, `GET /health` trả `{"status":"ok"}`.
 - Gọi `POST /api/order` với alert giả (dry run) → server không crash, trả lỗi rõ ràng (`config_error` vì chưa có mật khẩu MT5 trong `.env`) thay vì lỗi 500 mù mờ.
-- Chạy `pytest` — 52/52 test pass (test dùng MT5 giả lập nên không cần cài MT5 thật/terminal thật để chạy test).
+- Chạy `pytest` — 69/69 test pass (test dùng MT5 giả lập nên không cần cài MT5 thật/terminal thật để chạy test).
 
 **Điều duy nhất chưa test được ở đây** là đặt lệnh thật vào MT5/Exness, vì máy này không có terminal MT5 đang đăng nhập tài khoản Exness thật. Phần đó bạn cần tự làm ở máy có MT5 (xem mục 3 và 4 bên dưới) — nhưng code, luồng xử lý, validate, log đều đã chạy đúng.
 
@@ -214,10 +214,12 @@ Các giá trị `order_id` hợp lệ:
 
 | `order_id` | Hành động |
 |---|---|
-| `openLong` | Mở lệnh BUY |
+| `openLong` | Mở lệnh BUY. **Nếu đang có lệnh SHORT mở** (cùng symbol + magic) → bot tự **đóng SHORT trước rồi mới mở LONG** (đảo lệnh), không để cả 2 chiều cùng mở. |
 | `closeLong` | Đóng (các) lệnh LONG đang mở của strategy đó |
-| `openShort` | Mở lệnh SELL |
+| `openShort` | Mở lệnh SELL. **Nếu đang có lệnh LONG mở** → bot tự **đóng LONG trước rồi mới mở SHORT** (đảo lệnh). |
 | `closeShort` | Đóng (các) lệnh SHORT đang mở của strategy đó |
+
+> Nếu không có lệnh ngược chiều nào đang mở, `openLong`/`openShort` hoạt động bình thường như trước (không có bước đóng lệnh nào cả).
 
 Response mẫu khi `dryRun: true`:
 
@@ -297,7 +299,7 @@ API không yêu cầu header hay xác thực gì cả — TradingView chỉ cầ
 pytest -q
 ```
 
-52 test đã viết sẵn, không cần MT5 thật hay terminal đang chạy (dùng MT5 giả lập trong `tests/conftest.py`), dùng để kiểm tra nhanh mỗi khi sửa code có làm hỏng logic hiện tại không.
+69 test đã viết sẵn, không cần MT5 thật hay terminal đang chạy (dùng MT5 giả lập trong `tests/conftest.py`), dùng để kiểm tra nhanh mỗi khi sửa code có làm hỏng logic hiện tại không.
 
 ## 12. Các cải tiến "chuẩn chuyên gia" đã thêm
 
@@ -307,7 +309,8 @@ pytest -q
 |---|---|---|
 | **Filling mode sai** | Rất nhiều symbol/broker (kể cả Exness) không hỗ trợ `IOC` — nếu hardcode, lệnh bị từ chối thẳng với lỗi "Unsupported filling mode", không vào được lệnh dù mọi thứ khác đúng. | Bot tự dò `symbol_info.filling_mode` để chọn đúng filling mode symbol đó hỗ trợ (`IOC` → `FOK` → `RETURN`), không hardcode nữa. |
 | **Sai số làm tròn volume** | Với các symbol có `volume_step` lẻ (VD `0.05`), làm tròn bằng số thực (float) có thể lệch khỏi step do sai số dấu phẩy động, khiến MT5 từ chối lệnh vì volume không hợp lệ. | Chuyển sang tính bằng `Decimal` (chính xác tuyệt đối), đảm bảo volume luôn khớp đúng lưới step. |
-| **Đụng độ khi có nhiều webhook tới cùng lúc** | Package `MetaTrader5` chỉ giữ 1 kết nối/tiến trình. Nếu 2 webhook (2 strategy khác tài khoản) tới cùng lúc mà không khoá, có thể gây lệnh gửi nhầm tài khoản. | Toàn bộ thao tác MT5 (kết nối, lấy giá, gửi lệnh) được bọc trong 1 khoá (`lock`), đảm bảo tại 1 thời điểm chỉ có 1 lệnh đang được xử lý — webhook khác phải đợi tới lượt, không chen ngang giữa chừng. |
+| **Đụng độ khi có nhiều webhook tới cùng lúc** | Package `MetaTrader5` chỉ giữ 1 kết nối/tiến trình. Nếu 2 webhook (2 strategy khác tài khoản) tới cùng lúc mà không khoá, có thể gây lệnh gửi nhầm tài khoản. | Toàn bộ thao tác MT5 (kết nối, lấy giá, gửi lệnh) được bọc trong 1 khoá (`lock`), đảm bảo tại 1 thời điểm chỉ có 1 lệnh đang được xử lý — webhook khác phải đợi tới lượt, không chen ngang giữa chừng. Nếu 1 lệnh giữ khoá quá **90 giây** (MT5 bị kẹt/treo), các lệnh sau tự báo lỗi rõ ràng thay vì treo vô hạn. |
+| **Cùng lúc mở cả LONG và SHORT** | Nếu chỉ đơn giản mở lệnh mới mà không kiểm tra vị thế ngược chiều đang mở, tài khoản có thể vừa có LONG vừa có SHORT cùng 1 symbol (hedging ngoài ý muốn), không đúng logic "đảo lệnh" thông thường của 1 strategy. | `openLong`/`openShort` tự kiểm tra và **đóng vị thế ngược chiều trước** (cùng symbol + magic) rồi mới mở lệnh mới — xem mục 7. |
 | **Server bị "đứng" khi đang chờ MT5** | Gọi MT5 là thao tác chặn (blocking); nếu xử lý ngay trên luồng chính, cả server (kể cả `/health`) sẽ bị treo trong lúc chờ MT5/broker phản hồi. | Các lệnh gọi MT5/Telegram được đẩy sang thread pool (`asyncio.to_thread`), server vẫn phản hồi các request khác trong lúc chờ. |
 | **TradingView gửi trùng webhook** | TradingView tự động gửi lại alert nếu không nhận phản hồi 2xx đủ nhanh (mất mạng, server chậm...) — dễ khiến bot **vào lệnh 2 lần** cho cùng 1 tín hiệu. | Bot nhớ lại các alert đã xử lý gần đây (theo strategy + order_id + symbol + comment + timenow) trong 30 giây; nếu trùng, trả về ngay `200 OK` với thông báo "Duplicate alert ignored" mà **không** gửi lệnh lại. |
 | **Giá đổi giữa lúc lấy tick và lúc gửi lệnh (Requote)** | Thị trường biến động nhanh, giá lúc gửi lệnh khác giá lúc bot đọc — MT5 trả lỗi Requote/Price Changed, lệnh bị từ chối. | Bot tự động lấy giá mới, nới `deviation` dần và gửi lại (tối đa 5 lần, có trần) nếu gặp đúng 2 lỗi này — xem mục 4.1. |

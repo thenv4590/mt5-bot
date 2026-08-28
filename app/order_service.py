@@ -58,6 +58,13 @@ def _build_open_request(
     }
 
 
+# Max time to wait to acquire MT5_LOCK before giving up. Without this, a
+# single stuck call (MT5 terminal frozen on a dialog, a hung IPC connect...)
+# would hold the lock forever and make every subsequent webhook call hang
+# indefinitely waiting for it, instead of failing with a clear error.
+LOCK_TIMEOUT_SECONDS = 90
+
+
 def execute_order(alert: TradingViewAlert, strategy: StrategyConfig) -> OrderResult:
     """Executes one webhook alert end-to-end against MT5.
 
@@ -65,7 +72,15 @@ def execute_order(alert: TradingViewAlert, strategy: StrategyConfig) -> OrderRes
     connection per process, so two webhook requests (e.g. for two
     different strategies/accounts) must never interleave their MT5 calls.
     """
-    with mt5_client.MT5_LOCK:
+    if not mt5_client.MT5_LOCK.acquire(timeout=LOCK_TIMEOUT_SECONDS):
+        raise OrderExecutionError(
+            f"Timed out after {LOCK_TIMEOUT_SECONDS}s waiting for another "
+            "order to finish using the MT5 connection. If this keeps "
+            "happening, the MT5 terminal is likely stuck (a dialog waiting "
+            "to be dismissed, or a broken connection) — restart the bot "
+            "and check the terminal."
+        )
+    try:
         dry_run = is_dry_run(strategy)
         # TradingView's perpetual-futures ticker suffix (".P", e.g.
         # "BTCUSDT.P") never matches a real MT5 symbol name, so it's
@@ -80,9 +95,22 @@ def execute_order(alert: TradingViewAlert, strategy: StrategyConfig) -> OrderRes
             mt5_client.ensure_connection(strategy, password)
 
             if alert.order_id == OrderId.OPEN_LONG:
-                return _open_position(alert, strategy, symbol, mt5_client.ORDER_TYPE_BUY, dry_run)
+                # Reverse: an opposite (SHORT) position open for this
+                # symbol/magic gets closed first, so openLong always ends
+                # up LONG-only, never both sides open at once.
+                reversal_note = _close_opposite_positions(
+                    strategy, symbol, mt5_client.POSITION_TYPE_SELL, dry_run
+                )
+                return _open_position(
+                    alert, strategy, symbol, mt5_client.ORDER_TYPE_BUY, dry_run, reversal_note
+                )
             elif alert.order_id == OrderId.OPEN_SHORT:
-                return _open_position(alert, strategy, symbol, mt5_client.ORDER_TYPE_SELL, dry_run)
+                reversal_note = _close_opposite_positions(
+                    strategy, symbol, mt5_client.POSITION_TYPE_BUY, dry_run
+                )
+                return _open_position(
+                    alert, strategy, symbol, mt5_client.ORDER_TYPE_SELL, dry_run, reversal_note
+                )
             elif alert.order_id == OrderId.CLOSE_LONG:
                 return _close_positions(
                     alert, strategy, symbol, mt5_client.POSITION_TYPE_BUY, dry_run
@@ -96,10 +124,91 @@ def execute_order(alert: TradingViewAlert, strategy: StrategyConfig) -> OrderRes
         except MT5Error as e:
             logger.error("MT5 error while executing order: %s", e)
             raise OrderExecutionError(str(e)) from e
+    finally:
+        mt5_client.MT5_LOCK.release()
+
+
+def _side_name(position_type) -> str:
+    return "LONG" if position_type == mt5_client.POSITION_TYPE_BUY else "SHORT"
+
+
+def _execute_closes(strategy: StrategyConfig, symbol: str, positions: list):
+    """Sends close orders for the given open positions (assumes dry_run
+    has already been handled by the caller). Returns (all_success,
+    last_result) — last_result is None only if `positions` is empty."""
+    symbol_info = mt5_client.get_symbol_info(symbol)
+    filling_mode = mt5_client.resolve_filling_mode(symbol_info)
+
+    last_result = None
+    all_success = True
+
+    for position in positions:
+        build_request = partial(
+            _build_close_request, position, strategy, symbol, filling_mode
+        )
+        result = mt5_client.send_order_with_retry(build_request, symbol, strategy.deviation)
+        success = result.retcode == mt5_client.TRADE_RETCODE_DONE
+        all_success = all_success and success
+        last_result = result
+        if not success:
+            logger.error(
+                "Close failed for ticket=%s: retcode=%s comment=%s",
+                position.ticket,
+                result.retcode,
+                result.comment,
+            )
+
+    return all_success, last_result
+
+
+def _close_opposite_positions(
+    strategy: StrategyConfig, symbol: str, opposite_position_type, dry_run: bool
+) -> str:
+    """Closes any open position(s) on the opposite side before opening a
+    new one, so openLong/openShort reverses an existing opposite position
+    instead of leaving both a LONG and a SHORT open at once.
+
+    Returns a short note describing what happened (empty string if there
+    was nothing to reverse), meant to be prefixed onto the open order's
+    result message.
+    """
+    positions = mt5_client.get_open_positions(symbol, strategy.magic)
+    positions = [p for p in positions if p.type == opposite_position_type]
+    if not positions:
+        return ""
+
+    side = _side_name(opposite_position_type)
+    total_volume = sum(p.volume for p in positions)
+
+    if dry_run:
+        logger.info(
+            "[DRY RUN] Reversing: would close %d %s position(s) volume=%s for symbol=%s before opening opposite side",
+            len(positions),
+            side,
+            total_volume,
+            symbol,
+        )
+        return f"Reversed {len(positions)} {side} position(s) (dry run)"
+
+    logger.info(
+        "Reversing: closing %d %s position(s) volume=%s for symbol=%s before opening opposite side",
+        len(positions),
+        side,
+        total_volume,
+        symbol,
+    )
+    all_success, _ = _execute_closes(strategy, symbol, positions)
+    status = "closed" if all_success else "failed to fully close"
+    return f"Reversed: {status} {len(positions)} {side} position(s)"
 
 
 def _open_position(
-    alert: TradingViewAlert, strategy: StrategyConfig, symbol: str, order_type, dry_run: bool
+    alert: TradingViewAlert,
+    strategy: StrategyConfig,
+    symbol: str,
+    order_type,
+    dry_run: bool,
+    reversal_note: str = "",
 ) -> OrderResult:
     symbol_info = mt5_client.get_symbol_info(symbol)
     mt5_client.ensure_symbol_tradable(symbol_info)
@@ -122,6 +231,9 @@ def _open_position(
             market_price,
             volume,
         )
+        message = "Dry run: no order sent to MT5"
+        if reversal_note:
+            message = f"{reversal_note}. {message}"
         return OrderResult(
             success=True,
             dry_run=True,
@@ -130,7 +242,7 @@ def _open_position(
             action=alert.order_id.value,
             volume=volume,
             price=market_price,
-            message="Dry run: no order sent to MT5",
+            message=message,
         )
 
     logger.info(
@@ -152,6 +264,10 @@ def _open_position(
             "Order failed: retcode=%s comment=%s", result.retcode, result.comment
         )
 
+    message = result.comment
+    if reversal_note:
+        message = f"{reversal_note}. {message}"
+
     return OrderResult(
         success=success,
         dry_run=False,
@@ -161,7 +277,7 @@ def _open_position(
         volume=volume,
         price=result.price if success else None,
         order_ticket=result.order if success else None,
-        message=result.comment,
+        message=message,
     )
 
 
@@ -173,7 +289,7 @@ def _close_positions(
 
     if not positions:
         message = (
-            f"No open {'LONG' if position_type == mt5_client.POSITION_TYPE_BUY else 'SHORT'} "
+            f"No open {_side_name(position_type)} "
             f"position found for symbol={symbol} magic={strategy.magic}"
         )
         logger.warning(message)
@@ -207,33 +323,14 @@ def _close_positions(
             message=f"Dry run: would close {len(positions)} position(s), no order sent to MT5",
         )
 
-    symbol_info = mt5_client.get_symbol_info(symbol)
-    filling_mode = mt5_client.resolve_filling_mode(symbol_info)
-
-    last_result = None
-    all_success = True
-
-    for position in positions:
-        build_request = partial(
-            _build_close_request, position, strategy, symbol, filling_mode
-        )
-        logger.info(
-            "Closing position: strategy=%s ticket=%s volume=%s",
-            alert.strategy,
-            position.ticket,
-            position.volume,
-        )
-        result = mt5_client.send_order_with_retry(build_request, symbol, strategy.deviation)
-        success = result.retcode == mt5_client.TRADE_RETCODE_DONE
-        all_success = all_success and success
-        last_result = result
-        if not success:
-            logger.error(
-                "Close failed for ticket=%s: retcode=%s comment=%s",
-                position.ticket,
-                result.retcode,
-                result.comment,
-            )
+    logger.info(
+        "Closing position(s): strategy=%s symbol=%s count=%d volume=%s",
+        alert.strategy,
+        symbol,
+        len(positions),
+        total_volume,
+    )
+    all_success, last_result = _execute_closes(strategy, symbol, positions)
 
     return OrderResult(
         success=all_success,

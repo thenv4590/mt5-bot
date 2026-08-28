@@ -8,9 +8,11 @@ orders on MetaTrader 5 (Exness) accounts.
 - `POST /api/order` accepts raw `text/plain` bodies (as sent by TradingView),
   manually parses the string as JSON, then validates it with Pydantic.
 - Maps `order_id` to trade actions:
-  - `openLong` → BUY
+  - `openLong` → BUY (reverses first: closes any open SHORT position(s) on
+    the same symbol/magic before opening the LONG)
   - `closeLong` → close open LONG position(s)
-  - `openShort` → SELL
+  - `openShort` → SELL (reverses first: closes any open LONG position(s)
+    before opening the SHORT)
   - `closeShort` → close open SHORT position(s)
 - `strategy` in the payload selects the strategy/account block from
   `config.json` (base capital, deviation, magic number, MT5 login/server/terminal
@@ -302,6 +304,14 @@ tests/                  pytest suite with a faked MetaTrader5 module
 - `closeLong` / `closeShort` close **all** open positions on the webhook's
   `symbol` that match the strategy's `magic` number and the requested side —
   not a specific ticket, since TradingView alerts don't carry one.
+- `openLong` / `openShort` reverse an opposite existing position first:
+  before opening, the bot closes any open position(s) on the *other* side
+  (same symbol/magic) — so `openLong` while SHORT is open closes the SHORT
+  then opens the LONG, and vice versa. This uses the same matching (symbol
+  + magic) as `closeLong`/`closeShort`. The reversal result is prefixed
+  onto the open order's `message` (e.g. `"Reversed: closed 1 SHORT
+  position(s). Request executed"`); if closing the opposite side fails,
+  the bot still attempts to open the new position.
 - Position sizing: `investment = config.price * order_ratio`,
   `volume = investment / market_price`, where `market_price` is the live
   ask (for opens/longs) or bid (for opens/shorts, and closes) fetched from
